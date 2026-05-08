@@ -17,9 +17,15 @@ const DEFAULT_SETTINGS = {
 
 // Initialize default settings on install
 chrome.runtime.onInstalled.addListener(async (details) => {
-  if (details.reason === 'install') {
+  if (details.reason === 'install' || details.reason === 'update') {
     await chrome.storage.sync.set(DEFAULT_SETTINGS);
-    console.log('[SpeakIt] Extension installed, defaults set.');
+    console.log('[SpeakIt] Extension installed/updated, defaults set.');
+    
+    // TEST FETCH
+    fetch('https://translate.google.com/translate_tts?ie=UTF-8&tl=bn&client=tw-ob&q=test')
+      .then(res => res.arrayBuffer())
+      .then(buf => console.log('TEST FETCH SUCCESS, byteLength:', buf.byteLength))
+      .catch(err => console.error('TEST FETCH FAILED:', err));
   }
 });
 
@@ -73,7 +79,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     const url = `https://translate.google.com/translate_tts?${params.toString()}`;
 
-    fetch(url)
+    fetch(url, { referrerPolicy: 'no-referrer' })
       .then(resp => {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         return resp.arrayBuffer();

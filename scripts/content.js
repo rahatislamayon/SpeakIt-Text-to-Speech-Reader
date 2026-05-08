@@ -327,6 +327,18 @@
     chrome.runtime.sendMessage(
       { action: 'bangla-tts', text: chunkText_, speed: settings.rate },
       (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('[SpeakIt] sendMessage error:', chrome.runtime.lastError.message);
+          isPlaying = false;
+          isPaused = false;
+          isBanglaMode = false;
+          banglaAudio = null;
+          updateButtonState('error');
+          showToast('Extension reloaded. Please refresh the page!', 'error');
+          setTimeout(() => updateButtonState('idle'), 3000);
+          return;
+        }
+
         if (!response || response.error) {
           console.error('[SpeakIt] Bangla TTS error:', response?.error);
           isPlaying = false;
@@ -334,8 +346,8 @@
           isBanglaMode = false;
           banglaAudio = null;
           updateButtonState('error');
-          showToast('Bangla TTS failed — check your internet connection', 'error');
-          setTimeout(() => updateButtonState('idle'), 1500);
+          showToast(`Bangla TTS failed: ${response?.error || 'Unknown error'}`, 'error');
+          setTimeout(() => updateButtonState('idle'), 3000);
           return;
         }
 
@@ -369,8 +381,8 @@
           isPlaying = false;
           isBanglaMode = false;
           updateButtonState('error');
-          showToast('Bangla TTS failed', 'error');
-          setTimeout(() => updateButtonState('idle'), 1500);
+          showToast(`Play error: ${e.message}`, 'error');
+          setTimeout(() => updateButtonState('idle'), 3000);
         });
       }
     );
