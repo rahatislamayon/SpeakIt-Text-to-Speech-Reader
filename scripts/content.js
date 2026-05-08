@@ -9,7 +9,7 @@
   const MAX_TEXT_LENGTH = 10000;
   const BTN_OFFSET = 10;
   const DEBOUNCE_MS = 80;
-  const BANGLA_SERVER_URL = 'http://localhost:5588';
+  const BANGLA_TTS_CHUNK_SIZE = 200; // Google Translate TTS character limit per request
 
   // SVG icon paths
   const ICONS = {
@@ -253,81 +253,120 @@
     }
   }
 
-  // ─── Bangla TTS Helpers ─────────────────────────────────────
+  // ─── Bangla TTS (Direct Google Translate — no server needed) ─
   function isBanglaVoice(voiceName) {
-    return voiceName && (
-      voiceName.startsWith('bangla-') ||
-      voiceName === 'bangla-female' ||
-      voiceName === 'bangla-male'
-    );
+    return voiceName && voiceName.startsWith('bangla-');
   }
 
-  async function speakBangla(text, voice) {
+  /** Split text into chunks at sentence boundaries, respecting the character limit */
+  function chunkText(text, maxLen) {
+    const chunks = [];
+    // Split on sentence-ending punctuation (।, ., !, ?)
+    const sentences = text.match(/[^।\.!?]+[।\.!?]*/g) || [text];
+    let current = '';
+
+    for (const sentence of sentences) {
+      const trimmed = sentence.trim();
+      if (!trimmed) continue;
+
+      if (trimmed.length > maxLen) {
+        // Long sentence — split on commas/spaces
+        if (current) { chunks.push(current.trim()); current = ''; }
+        const words = trimmed.split(/\s+/);
+        let wordBuf = '';
+        for (const word of words) {
+          if ((wordBuf + ' ' + word).trim().length > maxLen) {
+            if (wordBuf) chunks.push(wordBuf.trim());
+            wordBuf = word;
+          } else {
+            wordBuf = wordBuf ? wordBuf + ' ' + word : word;
+          }
+        }
+        if (wordBuf) chunks.push(wordBuf.trim());
+      } else if ((current + ' ' + trimmed).trim().length > maxLen) {
+        chunks.push(current.trim());
+        current = trimmed;
+      } else {
+        current = current ? current + ' ' + trimmed : trimmed;
+      }
+    }
+    if (current.trim()) chunks.push(current.trim());
+    return chunks.length ? chunks : [text.slice(0, maxLen)];
+  }
+
+  /** Build a Google Translate TTS URL for a text chunk */
+  function buildGoogleTTSUrl(text, speed) {
+    const params = new URLSearchParams({
+      ie: 'UTF-8',
+      tl: 'bn',
+      client: 'tw-ob',
+      q: text,
+      ttsspeed: speed <= 0.7 ? '0.24' : '1'
+    });
+    return `https://translate.google.com/translate_tts?${params.toString()}`;
+  }
+
+  let banglaChunks = [];   // queued audio chunks
+  let banglaChunkIdx = 0;  // current chunk index
+
+  function speakBangla(text) {
     updateButtonState('loading');
     isBanglaMode = true;
 
-    try {
-      const banglaVoice = voice === 'bangla-male' ? 'male' : 'female';
-      const resp = await fetch(`${BANGLA_SERVER_URL}/speak`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: banglaVoice, format: 'base64' })
-      });
+    // Stop any previous playback
+    if (banglaAudio) { banglaAudio.pause(); banglaAudio = null; }
+    banglaChunks = chunkText(text, BANGLA_TTS_CHUNK_SIZE);
+    banglaChunkIdx = 0;
 
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: 'Server error' }));
-        throw new Error(err.error || `Server returned ${resp.status}`);
-      }
+    playNextBanglaChunk();
+  }
 
-      const data = await resp.json();
+  function playNextBanglaChunk() {
+    if (banglaChunkIdx >= banglaChunks.length) {
+      // All chunks done
+      isPlaying = false;
+      isPaused = false;
+      isBanglaMode = false;
+      banglaAudio = null;
+      updateButtonState('idle');
+      setTimeout(() => { if (!isPlaying) hideButton(); }, 800);
+      return;
+    }
 
-      // Stop any previous audio
-      if (banglaAudio) { banglaAudio.pause(); banglaAudio = null; }
+    const url = buildGoogleTTSUrl(banglaChunks[banglaChunkIdx], settings.rate);
+    banglaAudio = new Audio(url);
+    banglaAudio.volume = settings.volume;
 
-      banglaAudio = new Audio(data.audio);
-      banglaAudio.volume = settings.volume;
-      banglaAudio.playbackRate = settings.rate;
+    banglaAudio.onplay = () => {
+      isPlaying = true;
+      isPaused = false;
+      updateButtonState('playing');
+    };
 
-      banglaAudio.onplay = () => {
-        isPlaying = true;
-        isPaused = false;
-        updateButtonState('playing');
-      };
+    banglaAudio.onended = () => {
+      banglaChunkIdx++;
+      playNextBanglaChunk();
+    };
 
-      banglaAudio.onended = () => {
-        isPlaying = false;
-        isPaused = false;
-        isBanglaMode = false;
-        banglaAudio = null;
-        updateButtonState('idle');
-        setTimeout(() => { if (!isPlaying) hideButton(); }, 800);
-      };
+    banglaAudio.onerror = () => {
+      console.error('[SpeakIt] Bangla chunk failed:', banglaChunks[banglaChunkIdx]);
+      isPlaying = false;
+      isPaused = false;
+      isBanglaMode = false;
+      banglaAudio = null;
+      updateButtonState('error');
+      showToast('Bangla TTS failed — check your internet connection', 'error');
+      setTimeout(() => updateButtonState('idle'), 1500);
+    };
 
-      banglaAudio.onerror = () => {
-        isPlaying = false;
-        isPaused = false;
-        isBanglaMode = false;
-        banglaAudio = null;
-        updateButtonState('error');
-        showToast('Audio playback error', 'error');
-        setTimeout(() => updateButtonState('idle'), 1500);
-      };
-
-      await banglaAudio.play();
-
-    } catch (e) {
-      console.error('[SpeakIt] Bangla TTS error:', e);
+    banglaAudio.play().catch(e => {
+      console.error('[SpeakIt] Bangla play error:', e);
       isPlaying = false;
       isBanglaMode = false;
       updateButtonState('error');
-
-      if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-        showToast('Bangla TTS server not running. Start server\start_server.bat', 'error', 4000);
-      } else {
-        showToast('Bangla TTS error: ' + e.message, 'error');
-      }
-      setTimeout(() => updateButtonState('idle'), 2000);
-    }
+      showToast('Bangla TTS failed — check your internet connection', 'error');
+      setTimeout(() => updateButtonState('idle'), 1500);
+    });
   }
 
   // ─── Main Speak Function ────────────────────────────────────
@@ -338,9 +377,9 @@
       return;
     }
 
-    // Route to Bangla TTS server if a Bangla voice is selected
+    // Route to Google Translate TTS if a Bangla voice is selected
     if (isBanglaVoice(settings.voice)) {
-      speakBangla(text, settings.voice);
+      speakBangla(text);
       return;
     }
 

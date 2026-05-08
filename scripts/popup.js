@@ -70,45 +70,26 @@
   }
 
   // ─── Populate Voices ───────────────────────────────────────
-  const BANGLA_SERVER = 'http://localhost:5588';
-
-  async function populateVoices() {
+  function populateVoices() {
     const voices = speechSynthesis.getVoices();
 
     voiceSelect.innerHTML = '';
     voicesReady = true;
 
-    // Add Bangla TTS voices at the top
-    try {
-      const resp = await fetch(`${BANGLA_SERVER}/voices`, { signal: AbortSignal.timeout(1500) });
-      if (resp.ok) {
-        const data = await resp.json();
-        const bnGroup = document.createElement('optgroup');
-        bnGroup.label = 'BN — বাংলা (Local Server)';
-        data.voices.forEach(v => {
-          const opt = document.createElement('option');
-          opt.value = `bangla-${v.id}`;
-          opt.textContent = `${v.name}`;
-          bnGroup.appendChild(opt);
-        });
-        voiceSelect.appendChild(bnGroup);
-      }
-    } catch {
-      // Server not running — add offline Bangla entries anyway
-      const bnGroup = document.createElement('optgroup');
-      bnGroup.label = 'BN — বাংলা (Server Offline)';
-      const optF = document.createElement('option');
-      optF.value = 'bangla-female';
-      optF.textContent = 'বাংলা নারী (Bangla Female) ⚠️';
-      optF.disabled = true;
-      const optM = document.createElement('option');
-      optM.value = 'bangla-male';
-      optM.textContent = 'বাংলা পুরুষ (Bangla Male) ⚠️';
-      optM.disabled = true;
-      bnGroup.appendChild(optF);
-      bnGroup.appendChild(optM);
-      voiceSelect.appendChild(bnGroup);
-    }
+    // Add Bangla voices at the top (uses Google Translate TTS — always available)
+    const bnGroup = document.createElement('optgroup');
+    bnGroup.label = 'BN — বাংলা';
+    const bnVoices = [
+      { id: 'bangla-female', name: 'বাংলা নারী (Bangla Female)' },
+      { id: 'bangla-male', name: 'বাংলা পুরুষ (Bangla Male)' }
+    ];
+    bnVoices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = v.name;
+      bnGroup.appendChild(opt);
+    });
+    voiceSelect.appendChild(bnGroup);
 
     // Add system voices (grouped by language)
     if (voices.length > 0) {
