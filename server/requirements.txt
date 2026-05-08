@@ -1,0 +1,3 @@
+gTTS
+flask
+flask-cors

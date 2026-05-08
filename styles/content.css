@@ -1,0 +1,173 @@
+/* ============================================
+   SpeakIt — Content Script Styles
+   Injected into every web page
+   ============================================ */
+
+/* === Speak Button === */
+#speakit-btn {
+  position: absolute;
+  z-index: 2147483647;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 150ms ease, transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  pointer-events: none;
+  background: rgba(26, 26, 46, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+#speakit-btn.speakit-visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+#speakit-btn:hover {
+  background: rgba(40, 40, 72, 0.95);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.12);
+  transform: scale(1.08);
+}
+
+#speakit-btn:focus-visible {
+  outline: 2px solid #7c6bf5;
+  outline-offset: 3px;
+}
+
+#speakit-btn:active {
+  transform: scale(0.95);
+}
+
+/* === Button SVG Icons === */
+#speakit-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: #e0e0ff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+/* === Playing State === */
+#speakit-btn.speakit-playing {
+  background: linear-gradient(135deg, #6c5ce7, #4285f4);
+  box-shadow: 0 4px 20px rgba(108, 92, 231, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+#speakit-btn.speakit-playing:hover {
+  box-shadow: 0 6px 28px rgba(108, 92, 231, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+/* Pulse animation while playing */
+#speakit-btn.speakit-playing::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(108, 92, 231, 0.5);
+  animation: speakit-pulse 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes speakit-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+/* === Loading State === */
+#speakit-btn.speakit-loading svg {
+  animation: speakit-spin 1s linear infinite;
+}
+
+@keyframes speakit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* === Error State (brief red flash) === */
+#speakit-btn.speakit-error {
+  background: rgba(220, 53, 69, 0.9) !important;
+  box-shadow: 0 4px 16px rgba(220, 53, 69, 0.4);
+}
+
+/* === Tooltip === */
+#speakit-tooltip {
+  position: absolute;
+  z-index: 2147483647;
+  background: rgba(20, 20, 40, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #e0e0ff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+#speakit-tooltip.speakit-tooltip-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* === Notification Toast === */
+#speakit-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 2147483647;
+  background: rgba(20, 20, 40, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #e0e0ff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  transition: opacity 200ms ease, transform 200ms ease;
+  pointer-events: none;
+}
+
+#speakit-toast.speakit-toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+#speakit-toast.speakit-toast-error {
+  border-left: 3px solid #f44;
+}
+
+#speakit-toast.speakit-toast-info {
+  border-left: 3px solid #4285f4;
+}

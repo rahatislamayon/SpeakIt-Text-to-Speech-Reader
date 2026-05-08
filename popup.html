@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpeakIt — Settings</title>
+  <link rel="stylesheet" href="styles/popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div class="header-brand">
+        <div class="header-logo">
+          <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        </div>
+        <div>
+          <div class="header-title">SpeakIt</div>
+          <div class="header-version">v1.0.0</div>
+        </div>
+      </div>
+      <div class="toggle-wrapper">
+        <label class="toggle" id="enable-toggle">
+          <input type="checkbox" id="enabled-checkbox" checked aria-label="Enable extension">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span class="status-text" id="status-text">Extension active</span>
+  </div>
+
+  <!-- Voice Settings -->
+  <div class="section">
+    <div class="section-title">Voice</div>
+    <div class="control-group">
+      <div class="control-label">
+        <span class="control-label-text">Voice</span>
+      </div>
+      <div class="select-wrapper">
+        <select id="voice-select" aria-label="Select voice">
+          <option>Loading voices…</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span class="control-label-text">Speed</span>
+        <span class="control-label-value" id="rate-value">1.0×</span>
+      </div>
+      <input type="range" id="rate-slider" min="0.5" max="2" step="0.1" value="1" aria-label="Speech rate">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span class="control-label-text">Pitch</span>
+        <span class="control-label-value" id="pitch-value">1.0</span>
+      </div>
+      <input type="range" id="pitch-slider" min="0.5" max="2" step="0.1" value="1" aria-label="Speech pitch">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span class="control-label-text">Volume</span>
+        <span class="control-label-value" id="volume-value">100%</span>
+      </div>
+      <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+    </div>
+  </div>
+
+  <!-- Button Position -->
+  <div class="section">
+    <div class="section-title">Button Position</div>
+    <div class="position-grid">
+      <label class="position-option">
+        <input type="radio" name="position" value="top-right" checked> Top-right
+      </label>
+      <label class="position-option">
+        <input type="radio" name="position" value="top-left"> Top-left
+      </label>
+      <label class="position-option">
+        <input type="radio" name="position" value="bottom-right"> Bottom-right
+      </label>
+      <label class="position-option">
+        <input type="radio" name="position" value="bottom-left"> Bottom-left
+      </label>
+    </div>
+  </div>
+
+  <!-- Shortcuts -->
+  <div class="section">
+    <div class="section-title">Keyboard Shortcuts</div>
+    <div class="shortcut-list">
+      <div class="shortcut-item">
+        <span class="shortcut-action">Speak selected text</span>
+        <div class="shortcut-keys">
+          <span class="key">Ctrl</span><span class="key">Shift</span><span class="key">S</span>
+        </div>
+      </div>
+      <div class="shortcut-item">
+        <span class="shortcut-action">Stop speaking</span>
+        <div class="shortcut-keys">
+          <span class="key">Ctrl</span><span class="key">Shift</span><span class="key">X</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <button class="footer-link" id="reset-btn">Reset Defaults</button>
+    <span class="footer-separator"></span>
+    <span class="footer-link" style="cursor:default; opacity:0.6;">Made with ♥</span>
+  </div>
+
+  <script src="scripts/popup.js"></script>
+</body>
+</html>
