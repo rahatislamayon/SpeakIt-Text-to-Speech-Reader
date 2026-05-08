@@ -60,4 +60,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  // Bangla TTS — fetch audio from Google Translate (background bypasses CORS)
+  if (message.action === 'bangla-tts') {
+    const { text, speed } = message;
+    const params = new URLSearchParams({
+      ie: 'UTF-8',
+      tl: 'bn',
+      client: 'tw-ob',
+      q: text,
+      ttsspeed: speed <= 0.7 ? '0.24' : '1'
+    });
+    const url = `https://translate.google.com/translate_tts?${params.toString()}`;
+
+    fetch(url)
+      .then(resp => {
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return resp.arrayBuffer();
+      })
+      .then(buffer => {
+        // Convert to base64 data URI
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const b64 = btoa(binary);
+        sendResponse({ audio: `data:audio/mpeg;base64,${b64}` });
+      })
+      .catch(err => {
+        console.error('[SpeakIt] Bangla TTS fetch error:', err);
+        sendResponse({ error: err.message });
+      });
+    return true; // async
+  }
 });

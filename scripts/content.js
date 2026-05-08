@@ -294,18 +294,6 @@
     return chunks.length ? chunks : [text.slice(0, maxLen)];
   }
 
-  /** Build a Google Translate TTS URL for a text chunk */
-  function buildGoogleTTSUrl(text, speed) {
-    const params = new URLSearchParams({
-      ie: 'UTF-8',
-      tl: 'bn',
-      client: 'tw-ob',
-      q: text,
-      ttsspeed: speed <= 0.7 ? '0.24' : '1'
-    });
-    return `https://translate.google.com/translate_tts?${params.toString()}`;
-  }
-
   let banglaChunks = [];   // queued audio chunks
   let banglaChunkIdx = 0;  // current chunk index
 
@@ -333,40 +321,59 @@
       return;
     }
 
-    const url = buildGoogleTTSUrl(banglaChunks[banglaChunkIdx], settings.rate);
-    banglaAudio = new Audio(url);
-    banglaAudio.volume = settings.volume;
+    const chunkText_ = banglaChunks[banglaChunkIdx];
 
-    banglaAudio.onplay = () => {
-      isPlaying = true;
-      isPaused = false;
-      updateButtonState('playing');
-    };
+    // Ask background service worker to fetch the audio (bypasses CORS)
+    chrome.runtime.sendMessage(
+      { action: 'bangla-tts', text: chunkText_, speed: settings.rate },
+      (response) => {
+        if (!response || response.error) {
+          console.error('[SpeakIt] Bangla TTS error:', response?.error);
+          isPlaying = false;
+          isPaused = false;
+          isBanglaMode = false;
+          banglaAudio = null;
+          updateButtonState('error');
+          showToast('Bangla TTS failed — check your internet connection', 'error');
+          setTimeout(() => updateButtonState('idle'), 1500);
+          return;
+        }
 
-    banglaAudio.onended = () => {
-      banglaChunkIdx++;
-      playNextBanglaChunk();
-    };
+        banglaAudio = new Audio(response.audio);
+        banglaAudio.volume = settings.volume;
 
-    banglaAudio.onerror = () => {
-      console.error('[SpeakIt] Bangla chunk failed:', banglaChunks[banglaChunkIdx]);
-      isPlaying = false;
-      isPaused = false;
-      isBanglaMode = false;
-      banglaAudio = null;
-      updateButtonState('error');
-      showToast('Bangla TTS failed — check your internet connection', 'error');
-      setTimeout(() => updateButtonState('idle'), 1500);
-    };
+        banglaAudio.onplay = () => {
+          isPlaying = true;
+          isPaused = false;
+          updateButtonState('playing');
+        };
 
-    banglaAudio.play().catch(e => {
-      console.error('[SpeakIt] Bangla play error:', e);
-      isPlaying = false;
-      isBanglaMode = false;
-      updateButtonState('error');
-      showToast('Bangla TTS failed — check your internet connection', 'error');
-      setTimeout(() => updateButtonState('idle'), 1500);
-    });
+        banglaAudio.onended = () => {
+          banglaChunkIdx++;
+          playNextBanglaChunk();
+        };
+
+        banglaAudio.onerror = () => {
+          console.error('[SpeakIt] Bangla audio playback error');
+          isPlaying = false;
+          isPaused = false;
+          isBanglaMode = false;
+          banglaAudio = null;
+          updateButtonState('error');
+          showToast('Bangla audio playback error', 'error');
+          setTimeout(() => updateButtonState('idle'), 1500);
+        };
+
+        banglaAudio.play().catch(e => {
+          console.error('[SpeakIt] Bangla play error:', e);
+          isPlaying = false;
+          isBanglaMode = false;
+          updateButtonState('error');
+          showToast('Bangla TTS failed', 'error');
+          setTimeout(() => updateButtonState('idle'), 1500);
+        });
+      }
+    );
   }
 
   // ─── Main Speak Function ────────────────────────────────────
