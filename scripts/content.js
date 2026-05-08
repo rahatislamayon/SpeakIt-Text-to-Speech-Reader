@@ -294,98 +294,143 @@
     return chunks.length ? chunks : [text.slice(0, maxLen)];
   }
 
-  let banglaChunks = [];   // queued audio chunks
-  let banglaChunkIdx = 0;  // current chunk index
+  let banglaChunks = [];
+  let banglaAudioElements = [];
+  let banglaChunkIdx = 0;
+  let banglaSessionId = 0; // Prevent race conditions on rapid clicks
 
   function speakBangla(text) {
     updateButtonState('loading');
     isBanglaMode = true;
+    const currentSessionId = ++banglaSessionId;
 
     // Stop any previous playback
-    if (banglaAudio) { banglaAudio.pause(); banglaAudio = null; }
+    if (banglaAudio) {
+      banglaAudio.pause();
+      banglaAudio = null;
+    }
+    
     banglaChunks = chunkText(text, BANGLA_TTS_CHUNK_SIZE);
+    banglaAudioElements = new Array(banglaChunks.length).fill(null);
     banglaChunkIdx = 0;
 
-    playNextBanglaChunk();
+    // Pre-fetch chunks sequentially to avoid gaps and autoplay blocks
+    prefetchChunk(0, currentSessionId, () => {
+      // Once the first chunk is ready, start playing immediately
+      playNextBanglaChunk();
+    });
   }
 
-  function playNextBanglaChunk() {
-    if (banglaChunkIdx >= banglaChunks.length) {
-      // All chunks done
-      isPlaying = false;
-      isPaused = false;
-      isBanglaMode = false;
-      banglaAudio = null;
-      updateButtonState('idle');
-      setTimeout(() => { if (!isPlaying) hideButton(); }, 800);
-      return;
-    }
+  function prefetchChunk(index, sessionId, onFirstReady) {
+    if (index >= banglaChunks.length || !isBanglaMode || sessionId !== banglaSessionId) return;
 
-    const chunkText_ = banglaChunks[banglaChunkIdx];
-
-    // Ask background service worker to fetch the audio (bypasses CORS)
     chrome.runtime.sendMessage(
-      { action: 'bangla-tts', text: chunkText_, speed: settings.rate },
+      { action: 'bangla-tts', text: banglaChunks[index], speed: settings.rate },
       (response) => {
+        if (!isBanglaMode || sessionId !== banglaSessionId) return; // aborted or superseded
+
         if (chrome.runtime.lastError) {
           console.error('[SpeakIt] sendMessage error:', chrome.runtime.lastError.message);
-          isPlaying = false;
-          isPaused = false;
-          isBanglaMode = false;
-          banglaAudio = null;
-          updateButtonState('error');
-          showToast('Extension reloaded. Please refresh the page!', 'error');
-          setTimeout(() => updateButtonState('idle'), 3000);
+          handleChunkError(index, 'Extension reloaded. Please refresh the page!');
           return;
         }
 
         if (!response || response.error) {
           console.error('[SpeakIt] Bangla TTS error:', response?.error);
-          isPlaying = false;
-          isPaused = false;
-          isBanglaMode = false;
-          banglaAudio = null;
-          updateButtonState('error');
-          showToast(`Bangla TTS failed: ${response?.error || 'Unknown error'}`, 'error');
-          setTimeout(() => updateButtonState('idle'), 3000);
+          handleChunkError(index, `Bangla TTS failed: ${response?.error || 'Unknown'}`);
           return;
         }
 
-        banglaAudio = new Audio(response.audio);
-        banglaAudio.volume = settings.volume;
+        // Create the audio element for this chunk
+        const audioEl = new Audio(response.audio);
+        audioEl.volume = settings.volume;
 
-        banglaAudio.onplay = () => {
+        audioEl.onplay = () => {
           isPlaying = true;
           isPaused = false;
           updateButtonState('playing');
         };
 
-        banglaAudio.onended = () => {
+        audioEl.onended = () => {
           banglaChunkIdx++;
-          playNextBanglaChunk();
+          playNextBanglaChunk(); // Play next seamlessly
         };
 
-        banglaAudio.onerror = () => {
-          console.error('[SpeakIt] Bangla audio playback error');
-          isPlaying = false;
-          isPaused = false;
-          isBanglaMode = false;
-          banglaAudio = null;
-          updateButtonState('error');
-          showToast('Bangla audio playback error', 'error');
-          setTimeout(() => updateButtonState('idle'), 1500);
+        audioEl.onerror = () => {
+          console.error('[SpeakIt] Chunk audio playback error at index', index);
+          handleChunkError(index, 'Audio chunk playback error');
         };
 
-        banglaAudio.play().catch(e => {
-          console.error('[SpeakIt] Bangla play error:', e);
-          isPlaying = false;
-          isBanglaMode = false;
-          updateButtonState('error');
-          showToast(`Play error: ${e.message}`, 'error');
-          setTimeout(() => updateButtonState('idle'), 3000);
-        });
+        // Store it in the array
+        banglaAudioElements[index] = audioEl;
+
+        // If this was the first chunk, trigger playback
+        if (index === 0 && onFirstReady) {
+          onFirstReady();
+        }
+
+        // Immediately start fetching the next chunk in the background
+        prefetchChunk(index + 1, sessionId);
       }
     );
+  }
+
+  function handleChunkError(index, msg) {
+    if (index === 0) {
+      isPlaying = false;
+      isBanglaMode = false;
+      banglaAudio = null;
+      updateButtonState('error');
+      showToast(msg, 'error');
+      setTimeout(() => updateButtonState('idle'), 3000);
+    } else {
+      // If a later chunk fails, we might just stop when we reach it
+      banglaAudioElements[index] = { error: msg };
+    }
+  }
+
+  function playNextBanglaChunk() {
+    if (banglaChunkIdx >= banglaChunks.length) {
+      // All chunks finished
+      isPlaying = false;
+      isPaused = false;
+      isBanglaMode = false;
+      banglaAudio = null;
+      banglaAudioElements = []; // free memory
+      updateButtonState('idle');
+      setTimeout(() => { if (!isPlaying) hideButton(); }, 800);
+      return;
+    }
+
+    const audioEl = banglaAudioElements[banglaChunkIdx];
+    
+    if (!audioEl) {
+      // Chunk hasn't finished downloading yet, wait a bit
+      updateButtonState('loading');
+      setTimeout(playNextBanglaChunk, 200);
+      return;
+    }
+
+    if (audioEl.error) {
+      // Encountered a fetch error on this chunk
+      isPlaying = false;
+      isBanglaMode = false;
+      banglaAudio = null;
+      updateButtonState('error');
+      showToast(audioEl.error, 'error');
+      setTimeout(() => updateButtonState('idle'), 3000);
+      return;
+    }
+
+    banglaAudio = audioEl;
+    banglaAudio.play().catch(e => {
+      console.error('[SpeakIt] Play error:', e);
+      isPlaying = false;
+      isBanglaMode = false;
+      updateButtonState('error');
+      showToast(`Play error: ${e.message}`, 'error');
+      setTimeout(() => updateButtonState('idle'), 3000);
+    });
   }
 
   // ─── Main Speak Function ────────────────────────────────────
