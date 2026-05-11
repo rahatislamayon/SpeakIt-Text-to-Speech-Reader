@@ -20,12 +20,54 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install' || details.reason === 'update') {
     await chrome.storage.sync.set(DEFAULT_SETTINGS);
     console.log('[SpeakIt] Extension installed/updated, defaults set.');
+  }
+
+  // Create Context Menu for PDFs and all pages
+  chrome.contextMenus.create({
+    id: 'speakit-read',
+    title: '🔊 SpeakIt: Read this',
+    contexts: ['selection']
+  });
+});
+
+// Helper: Ensure Offscreen Document exists
+async function setupOffscreenDocument() {
+  const path = 'offscreen.html';
+  const url = chrome.runtime.getURL(path);
+  const contexts = await chrome.runtime.getContexts({
+    contextTypes: ['OFFSCREEN_DOCUMENT'],
+    documentUrls: [url]
+  });
+
+  if (contexts.length > 0) return;
+
+  await chrome.offscreen.createDocument({
+    url: path,
+    reasons: ['AUDIO_PLAYBACK'],
+    justification: 'Text-to-speech background playback for PDFs'
+  });
+}
+
+// Handle Context Menu click
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === 'speakit-read' && info.selectionText) {
+    const settings = await chrome.storage.sync.get(null);
+    const mergedSettings = { ...DEFAULT_SETTINGS, ...settings };
     
-    // TEST FETCH
-    fetch('https://translate.google.com/translate_tts?ie=UTF-8&tl=bn&client=tw-ob&q=test')
-      .then(res => res.arrayBuffer())
-      .then(buf => console.log('TEST FETCH SUCCESS, byteLength:', buf.byteLength))
-      .catch(err => console.error('TEST FETCH FAILED:', err));
+    // First try sending to content script (if normal page)
+    chrome.tabs.sendMessage(tab.id, { action: 'speak-selected', text: info.selectionText }, (response) => {
+      // If error, it means no content script (e.g. PDF viewer)
+      if (chrome.runtime.lastError) {
+        console.log('[SpeakIt] Content script not found, using offscreen document for PDF...');
+        setupOffscreenDocument().then(() => {
+          chrome.runtime.sendMessage({
+            action: 'offscreen-speak',
+            text: info.selectionText,
+            settings: mergedSettings
+          });
+        });
+      }
+    });
   }
 });
 
@@ -37,9 +79,13 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   if (settings.enabled === false) return;
 
   if (command === 'speak-selected') {
+    // Note: 'speak-selected' via shortcut on PDFs is hard because we can't easily get 
+    // the selected text from a PDF without content script. 
+    // Context Menu is the only way to get text from a PDF.
     chrome.tabs.sendMessage(tab.id, { action: 'speak-selected' }).catch(() => {});
   } else if (command === 'stop-speaking') {
     chrome.tabs.sendMessage(tab.id, { action: 'stop-speaking' }).catch(() => {});
+    chrome.runtime.sendMessage({ action: 'offscreen-stop' }).catch(() => {});
   }
 });
 

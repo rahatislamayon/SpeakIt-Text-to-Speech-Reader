@@ -53,11 +53,13 @@
     }
   });
 
-  // Listen for keyboard shortcut commands from background
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (!settings.enabled) return;
-    if (msg.action === 'speak-selected') speakSelected();
-    if (msg.action === 'stop-speaking') stopSpeaking();
+  // Listen for commands from background
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'speak-selected') {
+      speakSelected(message.text);
+    } else if (message.action === 'stop-speaking') {
+      stopSpeaking();
+    }
   });
 
   // ─── Settings ───────────────────────────────────────────────
@@ -434,8 +436,8 @@
   }
 
   // ─── Main Speak Function ────────────────────────────────────
-  function speakSelected() {
-    const text = cleanText(getSelectedText());
+  function speakSelected(textOverride) {
+    const text = textOverride || cleanText(getSelectedText());
     if (!text) {
       showToast('Select some text first', 'info');
       return;
